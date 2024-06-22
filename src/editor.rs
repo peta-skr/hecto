@@ -12,6 +12,12 @@ const STATUS_BG_COLOR: color::Rgb = color::Rgb(239, 239, 239);
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const QUIT_TIMES: u8 = 3;
 
+#[derive(PartialEq, Copy, Clone)]
+pub enum SearchDirection {
+    Forward,
+    Backward,
+}
+
 #[derive(Default, Clone)]
 pub struct Position {
     pub x: usize,
@@ -22,7 +28,6 @@ struct StatusMessage {
     text: String,
     time: Instant,
 }
-
 impl StatusMessage {
     fn from(message: String) -> Self {
         Self {
@@ -48,21 +53,19 @@ impl Editor {
             if let Err(error) = self.refresh_screen() {
                 die(error);
             }
-
             if self.should_quit {
                 break;
             }
-
             if let Err(error) = self.process_keypress() {
                 die(error);
             }
         }
     }
-
     pub fn default() -> Self {
         let args: Vec<String> = env::args().collect();
         let mut initial_status =
             String::from("HELP: Ctrl-F = find | Ctrl-S = save | Ctrl-Q = quit");
+
         let document = if let Some(file_name) = args.get(1) {
             let doc = Document::open(file_name);
             if let Ok(doc) = doc {
@@ -74,6 +77,7 @@ impl Editor {
         } else {
             Document::default()
         };
+
         Self {
             should_quit: false,
             terminal: Terminal::default().expect("Failed to initialize terminal"),
@@ -103,7 +107,6 @@ impl Editor {
         Terminal::cursor_show();
         Terminal::flush()
     }
-
     fn save(&mut self) {
         if self.document.file_name.is_none() {
             let new_name = self.prompt("Save as: ", |_, _, _| {}).unwrap_or(None);
@@ -115,45 +118,47 @@ impl Editor {
         }
 
         if self.document.save().is_ok() {
-            self.status_message = StatusMessage::from("Fiel saved successfully.".to_string());
+            self.status_message = StatusMessage::from("File saved successfully.".to_string());
         } else {
-            self.status_message = StatusMessage::from("Error writing file!".to_string())
+            self.status_message = StatusMessage::from("Error writing file!".to_string());
         }
     }
-
     fn search(&mut self) {
         let old_position = self.cursor_position.clone();
-        if let Some(query) = self
+        let mut direction = SearchDirection::Forward;
+        let query = self
             .prompt(
                 "Search (ESC to cancel, Arrows to navigate): ",
                 |editor, key, query| {
                     let mut moved = false;
                     match key {
                         Key::Right | Key::Down => {
+                            direction = SearchDirection::Forward;
                             editor.move_cursor(Key::Right);
                             moved = true;
                         }
-                        _ => (),
+                        Key::Left | Key::Up => direction = SearchDirection::Backward,
+                        _ => direction = SearchDirection::Forward,
                     }
-                    if let Some(position) = editor.document.find(&query) {
+                    if let Some(position) =
+                        editor
+                            .document
+                            .find(&query, &editor.cursor_position, direction)
+                    {
                         editor.cursor_position = position;
                         editor.scroll();
+                    } else if moved {
+                        editor.move_cursor(Key::Left);
                     }
                 },
             )
-            .unwrap_or(None)
-        {
-            if let Some(position) = self.document.find(&query[..]) {
-                self.cursor_position = position;
-            } else {
-                self.status_message = StatusMessage::from(format!("Not found :{}.", query));
-            }
-        } else {
+            .unwrap_or(None);
+
+        if query.is_none() {
             self.cursor_position = old_position;
             self.scroll();
         }
     }
-
     fn process_keypress(&mut self) -> Result<(), std::io::Error> {
         let pressed_key = Terminal::read_key()?;
         match pressed_key {
@@ -198,7 +203,6 @@ impl Editor {
         }
         Ok(())
     }
-
     fn scroll(&mut self) {
         let Position { x, y } = self.cursor_position;
         let width = self.terminal.size().width as usize;
@@ -209,14 +213,12 @@ impl Editor {
         } else if y >= offset.y.saturating_add(height) {
             offset.y = y.saturating_sub(height).saturating_add(1);
         }
-
         if x < offset.x {
             offset.x = x;
         } else if x >= offset.x.saturating_add(width) {
             offset.x = x.saturating_sub(width).saturating_add(1);
         }
     }
-
     fn move_cursor(&mut self, key: Key) {
         let terminal_height = self.terminal.size().height as usize;
         let Position { mut y, mut x } = self.cursor_position;
@@ -226,7 +228,6 @@ impl Editor {
         } else {
             0
         };
-
         match key {
             Key::Up => y = y.saturating_sub(1),
             Key::Down => {
@@ -272,20 +273,17 @@ impl Editor {
             Key::End => x = width,
             _ => (),
         }
-
         width = if let Some(row) = self.document.row(y) {
             row.len()
         } else {
             0
         };
-
         if x > width {
             x = width;
         }
 
         self.cursor_position = Position { x, y }
     }
-
     fn draw_welcome_message(&self) {
         let mut welcome_message = format!("Hecto editor -- version {}", VERSION);
         let width = self.terminal.size().width as usize;
@@ -297,15 +295,13 @@ impl Editor {
         welcome_message.truncate(width);
         println!("{}\r", welcome_message);
     }
-
     pub fn draw_row(&self, row: &Row) {
         let width = self.terminal.size().width as usize;
         let start = self.offset.x;
         let end = self.offset.x.saturating_add(width);
         let row = row.render(start, end);
-        println!("{}\r", row);
+        println!("{}\r", row)
     }
-
     #[allow(clippy::integer_division, clippy::integer_arithmetic)]
     fn draw_rows(&self) {
         let height = self.terminal.size().height;
@@ -323,7 +319,6 @@ impl Editor {
             }
         }
     }
-
     fn draw_status_bar(&self) {
         let mut status;
         let width = self.terminal.size().width as usize;
@@ -332,6 +327,7 @@ impl Editor {
         } else {
             ""
         };
+
         let mut file_name = "[No Name]".to_string();
         if let Some(name) = &self.document.file_name {
             file_name = name.clone();
@@ -343,6 +339,7 @@ impl Editor {
             self.document.len(),
             modified_indicator
         );
+
         let line_indicator = format!(
             "{}/{}",
             self.cursor_position.y.saturating_add(1),
@@ -359,7 +356,6 @@ impl Editor {
         Terminal::reset_fg_color();
         Terminal::reset_bg_color();
     }
-
     fn draw_message_bar(&self) {
         Terminal::clear_current_line();
         let message = &self.status_message;
@@ -369,16 +365,14 @@ impl Editor {
             print!("{}", text);
         }
     }
-
-    fn prompt<C>(&mut self, prompt: &str, callback: C) -> Result<Option<String>, std::io::Error>
+    fn prompt<C>(&mut self, prompt: &str, mut callback: C) -> Result<Option<String>, std::io::Error>
     where
-        C: Fn(&mut Self, Key, &String),
+        C: FnMut(&mut Self, Key, &String),
     {
         let mut result = String::new();
         loop {
             self.status_message = StatusMessage::from(format!("{}{}", prompt, result));
             self.refresh_screen()?;
-
             let key = Terminal::read_key()?;
             match key {
                 Key::Backspace => result.truncate(result.len().saturating_sub(1)),
@@ -406,5 +400,5 @@ impl Editor {
 
 fn die(e: std::io::Error) {
     Terminal::clear_screen();
-    panic!("{}", e);
+    panic!(e);
 }
