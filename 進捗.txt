@@ -1,1 +1,3 @@
-Detect file typeの説明から
+Detect file type
+The bulk of this change deals with passing around the highlighting options, so that Row has it available when its being highlighted. Then, within highlight, we simply wrap the highlighting for numbers in another if statement which checks whether or not numbers is enabled.
+の説明文から
