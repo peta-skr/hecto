@@ -1,3 +1,3 @@
 Detect file type
-The bulk of this change deals with passing around the highlighting options, so that Row has it available when its being highlighted. Then, within highlight, we simply wrap the highlighting for numbers in another if statement which checks whether or not numbers is enabled.
-の説明文から
+Now for the actual highlighting code. We will use an in_string variable to keep track of whether we are currently inside a string. If we are, then we’ll keep highlighting the current character as a string until we hit the closing quote.
+の下のコードから

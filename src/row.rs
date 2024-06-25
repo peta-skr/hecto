@@ -200,6 +200,7 @@ impl Row {
         }
 
         let mut prev_is_separator = true;
+        let mut in_string = false;
         let mut index = 0;
 
         while let Some(c) = chars.get(index) {
@@ -221,7 +222,21 @@ impl Row {
             } else {
                 &highlighting::Type::None
             };
-            if opts.numbers {
+
+            if opts.string() {
+                if in_string {
+                    highlighting.push(highlighting::Type::String);
+                    if *c == '"' {
+                        in_string = false;
+                        prev_is_separator = true;
+                    } else {
+                        prev_is_separator = false;
+                    }
+                    index
+                }
+            }
+
+            if opts.numbers() {
                 if (c.is_ascii_digit()
                     && (prev_is_separator || previous_highlight == &highlighting::Type::Number))
                     || (c == &'.' && previous_highlight == &highlighting::Type::Number)
