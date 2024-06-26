@@ -223,23 +223,37 @@ impl Row {
                 &highlighting::Type::None
             };
 
-            if opts.string() {
+            if opts.strings() {
                 if in_string {
                     highlighting.push(highlighting::Type::String);
+
+                    if *c == '\\' && index < self.len().saturating_sub(1) {
+                        highlighting.push(highlighting::Type::String);
+                        index += 2;
+                        continue;
+                    }
+
                     if *c == '"' {
                         in_string = false;
                         prev_is_separator = true;
                     } else {
                         prev_is_separator = false;
                     }
-                    index
+                    index += 1;
+                    continue;
+                } else if prev_is_separator && *c == '"' {
+                    highlighting.push(highlighting::Type::String);
+                    in_string = true;
+                    prev_is_separator = true;
+                    index += 1;
+                    continue;
                 }
             }
 
             if opts.numbers() {
                 if (c.is_ascii_digit()
-                    && (prev_is_separator || previous_highlight == &highlighting::Type::Number))
-                    || (c == &'.' && previous_highlight == &highlighting::Type::Number)
+                    && (prev_is_separator || *previous_highlight == highlighting::Type::Number))
+                    || (*c == '.' && *previous_highlight == highlighting::Type::Number)
                 {
                     highlighting.push(highlighting::Type::Number);
                 } else {

@@ -1,3 +1,4 @@
-Detect file type
-Now for the actual highlighting code. We will use an in_string variable to keep track of whether we are currently inside a string. If we are, then we’ll keep highlighting the current character as a string until we hit the closing quote.
+Let’s see how we can implement character highlighting:
+
+
 の下のコードから
