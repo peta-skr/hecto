@@ -1,4 +1,2 @@
-Let’s see how we can implement character highlighting:
-
-
+Improve code quality
 の下のコードから
