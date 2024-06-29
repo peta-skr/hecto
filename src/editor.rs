@@ -99,8 +99,7 @@ impl Editor {
             println!("Goodbye.\r");
         } else {
             self.document.highlight(
-                &self,
-                self.highlighted_word,
+                &self.highlighted_word,
                 Some(
                     self.offset
                         .y
@@ -162,7 +161,7 @@ impl Editor {
                     } else if moved {
                         editor.move_cursor(Key::Left);
                     }
-                    editor.document.highlight(Some(query));
+                    editor.highlighted_word = Some(query.to_string());
                 },
             )
             .unwrap_or(None);
@@ -171,7 +170,7 @@ impl Editor {
             self.cursor_position = old_position;
             self.scroll();
         }
-        self.document.highlight(None);
+        self.highlighted_word = None;
     }
     fn process_keypress(&mut self) -> Result<(), std::io::Error> {
         let pressed_key = Terminal::read_key()?;
