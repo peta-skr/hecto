@@ -45,6 +45,7 @@ pub struct Editor {
     document: Document,
     status_message: StatusMessage,
     quit_times: u8,
+    highlighted_word: Option<String>,
 }
 
 impl Editor {
@@ -86,16 +87,27 @@ impl Editor {
             offset: Position::default(),
             status_message: StatusMessage::from(initial_status),
             quit_times: QUIT_TIMES,
+            highlighted_word: None,
         }
     }
 
-    fn refresh_screen(&self) -> Result<(), std::io::Error> {
+    fn refresh_screen(&mut self) -> Result<(), std::io::Error> {
         Terminal::cursor_hide();
         Terminal::cursor_position(&Position::default());
         if self.should_quit {
             Terminal::clear_screen();
             println!("Goodbye.\r");
         } else {
+            self.document.highlight(
+                &self,
+                self.highlighted_word,
+                Some(
+                    self.offset
+                        .y
+                        .saturating_add(self.terminal.size().height as usize),
+                ),
+            );
+
             self.draw_rows();
             self.draw_status_bar();
             self.draw_message_bar();
