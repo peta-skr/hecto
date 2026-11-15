@@ -1,9 +1,60 @@
-# Rust Starter
+# hecto
 
-Here you can easily get started with [Rust](https://www.rust-lang.org/) and experiment. Make sure to Fork this template by clicking the button in the top right corner!
+Philipp Flenkerのチュートリアル「hecto: Build Your Own Text Editor in Rust」に沿って、Rustで書いたターミナル上で動くテキストエディタ。端末の制御には `termion` を使う。チュートリアルの第7章（Syntax Highlighting）の、複数行コメントの色付けまで実装している。
 
-Check out [src/main.rs](./src/main.rs) for the code. When you save, it will automatically recompile and show a new version thanks to [`cargo-watch`](https://crates.io/crates/cargo-watch).
+## できること
 
-To add a new dependency, open a new terminal (```CMD/Ctrl + ` ```) and run `cargo add ...`.
+- ファイルを開いて表示・編集し、`Ctrl-S` で保存する。ファイル名が無いときは保存時に名前を尋ねる
+- 矢印キー・PageUp/PageDown・Home/Endでのカーソル移動と、縦横のスクロール
+- 文字の挿入、Backspace/Deleteでの削除、Enterでの行の分割、行末でのDeleteによる次の行との連結
+- 未保存の変更があるときは、`Ctrl-Q` をあと3回押すまで終了しない
+- ステータスバー（ファイル名、行数、変更の有無、ファイルタイプ、現在の行）と、5秒で消えるメッセージバー
+- `Ctrl-F` によるインクリメンタル検索。入力のたびに一致箇所へ移動して色を付け、矢印キーで前方・後方の次の一致へ移る。Escで検索前の位置に戻る
+- 拡張子が `.rs` のファイルのシンタックスハイライト。数値、文字列、文字リテラル、`//` コメント、`/* */` の複数行コメント、キーワード（`fn`、`let` など）、型名（`i32`、`usize` など）を色分けする
+- カーソル移動・挿入・削除を書記素クラスタ単位で行うので、結合文字や絵文字も1文字として扱う
 
-After rebuilding the environment by changing the [Dockerfile](./.devcontainer/Dockerfile), you might have to restart `rust-analyzer` by doing `CMD/Ctrl+K` and "Restart rust server" or restart the VM by clicking the CodeSandbox logo (in the top left) and clicking "Restart Instance".
+## 動かし方
+
+`termion` を使っているので、Linux / macOSのターミナルで動かす（Windowsのコンソールでは動かない）。
+
+```
+cargo run -- <ファイル名>
+```
+
+ファイル名を省略すると空のバッファで起動する。`text.txt` は動作確認用のテキストで、全角文字・結合文字・絵文字を含む。
+
+## 構成
+
+| ファイル | 役割 |
+|---|---|
+| `src/main.rs` | モジュール宣言、Clippyの設定、`Editor` の起動 |
+| `src/editor.rs` | キー入力の処理、画面の描画、ステータスバー、プロンプト、検索の操作 |
+| `src/document.rs` | 行の集まり。ファイルの読み書き、挿入・削除、検索、ハイライトの更新範囲 |
+| `src/row.rs` | 1行分の文字列。書記素単位の編集・検索と、シンタックスハイライトの判定 |
+| `src/terminal.rs` | `termion` の薄いラッパー（rawモード、カーソル、色） |
+| `src/highlighting.rs` | ハイライトの種類と色の対応 |
+| `src/filetype.rs` | ファイル名からファイルタイプとハイライトの設定を決める |
+
+`.devcontainer/` と `.codesandbox/` は、リポジトリの元にしたCodeSandboxのRustテンプレートに含まれていた設定ファイル。
+
+## 設計・実装のポイント
+
+責務の分け方はチュートリアルの構成に沿っている。
+
+- `Editor`（入力と描画）、`Document`（行の集まりとファイル）、`Row`（1行の文字列と表示）、`Terminal`（端末操作）に分けている
+- `Row` は文字列と書記素の数を持ち、編集のたびに書記素で数え直す。カーソル位置をバイトではなく書記素で数えるため
+- ハイライトは描画のたびに画面の下端の行までだけ計算する。計算済みの行は `is_highlighted` で飛ばし、編集した行の1行上から下だけフラグを戻して計算し直す
+- 複数行コメントは、各行の `highlight` が「コメントが閉じないまま行が終わったか」を返し、次の行はその状態から判定を始める
+- 検索はプロンプトにコールバック（`FnMut(&mut Self, Key, &String)`）を渡す形で書き、キーを1つ押すごとに検索と画面の更新を行う
+- `main.rs` で `clippy::pedantic` と `clippy::restriction` を有効にし、許容するものだけを `allow` で外している
+
+## 学んだこと
+
+- 端末をrawモードにし、カーソル移動や色のエスケープシーケンスを出してエディタの画面を描く仕組み
+- Unicodeの書記素クラスタとバイト位置の違いと、文字列の編集をどちらの単位で行うか
+- 行をまたいで状態を持ち越すシンタックスハイライト（複数行コメント）と、計算し直す範囲の絞り方
+- プロンプトにエディタ自身を受け取るクロージャを渡して、保存時の名前入力と検索で同じ入力処理を使う書き方
+
+## 参考
+
+- Philipp Flenker「hecto: Build Your Own Text Editor in Rust」 https://philippflenker.com/hecto/
